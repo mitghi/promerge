@@ -41,4 +41,6 @@ helpexpr = {hash ~ whitespace ~ helplit ~ whitespace ~ helpkey ~  whitespace ~ c
 typexpr = {hash ~ whitespace ~ typelit ~ whitespace ~ typekey ~ whitespace ~ typeval }
 genericomment = {hash ~ whitespace ~ commentval}
 promstmt = {key ~ (lbrace ~ (pairs)* ~ rbrace){0,1} ~ whitespace ~ ((posInf | negInf | NaN | number) ~ whitespace ){0,2}}
-statement = {  SOI ~ ((promstmt | helpexpr | typexpr | genericomment) ~ NEWLINE?)* ~ EOI }
+block = {((helpexpr | typexpr | genericomment)~ NEWLINE?)+ ~ (promstmt ~ NEWLINE?)+}
+statement = {SOI ~ block+ ~ EOI}
+statement_debug = { SOI ~ ((promstmt | helpexpr | typexpr | genericomment) ~ NEWLINE?)* ~ EOI}
