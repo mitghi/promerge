@@ -1,0 +1,44 @@
+alpha = _{'a'..'z' | 'A'..'Z'}
+number = @{
+    "-"?
+    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+    ~ ("." ~ ASCII_DIGIT*)?
+    ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+string = ${"\"" ~ inner ~ "\""}
+inner = @{char*}
+char = {
+    !("\"" | "\\") ~ ANY
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+special_charaters = _{"_" | "-" | "\\"}
+whitespace = _{(" "| "\n")*}
+posInf = {"+Inf"}
+negInf = {"-Inf"}
+NaN = {"NaN"}
+lbrace = _{"{"}
+rbrace = _{"}"}
+typelit = {"TYPE"}
+helplit = {"HELP"}
+ident = {alpha+}
+key = @{ident ~ ("_"~ident)*}
+pair = {ident ~ "="  ~ string}
+comma = _{","}
+pairs = {pair ~ (comma ~ pair)*}
+hash = _{"#"}
+helpkey = {key}
+helpval = {inner}
+typekey = {key}
+countertype = {"counter"}
+gaugetype = {"gauge"}
+histogramtype = {"histogram"}
+summarytype = {"summary"}
+untyped = {"untyped"}
+typeval = { countertype | gaugetype | histogramtype | summarytype | untyped }
+commentval = @{((ASCII_DIGIT| ASCII_NONZERO_DIGIT | ASCII_BIN_DIGIT | ASCII_OCT_DIGIT | ASCII_HEX_DIGIT | ASCII_ALPHA_LOWER | ASCII_ALPHA_UPPER | ASCII_ALPHA | ASCII_ALPHANUMERIC | !"\n" ~ ANY ))*}
+helpexpr = {hash ~ whitespace ~ helplit ~ whitespace ~ helpkey ~  whitespace ~ commentval}
+typexpr = {hash ~ whitespace ~ typelit ~ whitespace ~ typekey ~ whitespace ~ typeval }
+genericomment = {hash ~ whitespace ~ commentval}
+promstmt = {key ~ (lbrace ~ (pairs)* ~ rbrace){0,1} ~ whitespace ~ ((posInf | negInf | NaN | number) ~ whitespace ){0,2}}
+statement = {  SOI ~ ((promstmt | helpexpr | typexpr | genericomment) ~ NEWLINE?)* ~ EOI }
