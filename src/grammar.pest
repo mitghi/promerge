@@ -19,8 +19,8 @@ negInf = {"-Inf"}
 NaN = {"NaN"}
 lbrace = _{"{"}
 rbrace = _{"}"}
-typelit = {"TYPE"}
-helplit = {"HELP"}
+typelit = _{"TYPE"}
+helplit = _{"HELP"}
 ident = {alpha+}
 key = @{ident ~ ("_"~ident)*}
 pair = {ident ~ "="  ~ string}
