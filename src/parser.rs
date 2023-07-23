@@ -144,7 +144,9 @@ pub(crate) fn parse<'a>(input: &'a str) -> Result<Vec<Value<'_>>, pest::error::E
                                 pairs.push("");
                                 pairs.push("");
                             }
-                            n.push_pairs(&pairs);
+                            if pairs.len() > 0 {
+                                n.push_pairs(&pairs);
+                            }
                             pairs.clear();
                             nums[0] = "";
                             nums[1] = "";
@@ -167,7 +169,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test() {
+    fn test_parse() {
         let input = r#"# TYPE http_requests_total counter
 # HELP http_requests_total The total number of HTTP requests.
 http_requests_total{method="post",code="200"} 1027 1395066363000
@@ -206,161 +208,168 @@ rpc_duration_seconds_sum 1.7560473e+07
 rpc_duration_seconds_count 2693
 "#;
 
+        /*
+        parsing this input generates the following AST:
+
+            - statement
+              - block
+                - typexpr
+                  - typekey > key: "http_requests_total"
+                  - typeval > countertype: "counter"
+                - helpexpr
+                  - helpkey > key: "http_requests_total"
+                  - commentval: "The total number of HTTP requests."
+                - promstmt
+                  - key: "http_requests_total"
+                  - pairs
+                    - pair
+                      - ident: "method"
+                      - string > inner: "post"
+                    - pair
+                      - ident: "code"
+                      - string > inner: "200"
+                  - number: "1027"
+                  - number: "1395066363000"
+                - promstmt
+                  - key: "http_requests_total"
+                  - pairs
+                    - pair
+                      - ident: "method"
+                      - string > inner: "post"
+                    - pair
+                      - ident: "code"
+                      - string > inner: "400"
+                  - number: "3"
+                  - number: "1395066363000"
+              - block
+                - genericomment > commentval: "Escaping in label values:"
+                - promstmt
+                  - key: "msdos_file_access_time_seconds"
+                  - pairs
+                    - pair
+                      - ident: "path"
+                      - string > inner: "C:\\\\DIR\\\\FILE.TXT"
+                    - pair
+                      - ident: "error"
+                      - string > inner: "Cannot find file:\\n\\\"FILE.TXT\\\""
+                  - number: "1.458255915e9"
+              - block
+                - genericomment > commentval: "Minimalistic line:"
+                - promstmt
+                  - key: "metric_without_timestamp_and_labels"
+                  - number: "12.47"
+              - block
+                - genericomment > commentval: "A weird metric from before the epoch:"
+                - promstmt
+                  - key: "something_weird"
+                  - pairs > pair
+                    - ident: "problem"
+                    - string > inner: "division by zero"
+                  - posInf: "+Inf"
+                  - number: "-3982045"
+              - block
+                - genericomment > commentval: "A histogram, which has a pretty complex representation in the text format:"
+                - helpexpr
+                  - helpkey > key: "http_request_duration_seconds"
+                  - commentval: "A histogram of the request duration."
+                - typexpr
+                  - typekey > key: "http_request_duration_seconds"
+                  - typeval > histogramtype: "histogram"
+                - promstmt
+                  - key: "http_request_duration_seconds_bucket"
+                  - pairs > pair
+                    - ident: "le"
+                    - string > inner: "0.05"
+                  - number: "24054"
+                - promstmt
+                  - key: "http_request_duration_seconds_bucket"
+                  - pairs > pair
+                    - ident: "le"
+                    - string > inner: "0.1"
+                  - number: "33444"
+                - promstmt
+                  - key: "http_request_duration_seconds_bucket"
+                  - pairs > pair
+                    - ident: "le"
+                    - string > inner: "0.2"
+                  - number: "100392"
+                - promstmt
+                  - key: "http_request_duration_seconds_bucket"
+                  - pairs > pair
+                    - ident: "le"
+                    - string > inner: "0.5"
+                  - number: "129389"
+                - promstmt
+                  - key: "http_request_duration_seconds_bucket"
+                  - pairs > pair
+                    - ident: "le"
+                    - string > inner: "1"
+                  - number: "133988"
+                - promstmt
+                  - key: "http_request_duration_seconds_bucket"
+                  - pairs > pair
+                    - ident: "le"
+                    - string > inner: "+Inf"
+                  - number: "144320"
+                - promstmt
+                  - key: "http_request_duration_seconds_sum"
+                  - number: "53423"
+                - promstmt
+                  - key: "http_request_duration_seconds_count"
+                  - number: "144320"
+              - block
+                - genericomment > commentval: "Finally a summary, which has a complex representation, too:"
+                - helpexpr
+                  - helpkey > key: "rpc_duration_seconds"
+                  - commentval: "A summary of the RPC duration in seconds."
+                - typexpr
+                  - typekey > key: "rpc_duration_seconds"
+                  - typeval > summarytype: "summary"
+                - promstmt
+                  - key: "rpc_duration_seconds"
+                  - pairs > pair
+                    - ident: "quantile"
+                    - string > inner: "0.01"
+                  - number: "3102"
+                - promstmt
+                  - key: "rpc_duration_seconds"
+                  - pairs > pair
+                    - ident: "quantile"
+                    - string > inner: "0.05"
+                  - number: "3272"
+                - promstmt
+                  - key: "rpc_duration_seconds"
+                  - pairs > pair
+                    - ident: "quantile"
+                    - string > inner: "0.5"
+                  - number: "4773"
+                - promstmt
+                  - key: "rpc_duration_seconds"
+                  - pairs > pair
+                    - ident: "quantile"
+                    - string > inner: "0.9"
+                  - number: "9001"
+                - promstmt
+                  - key: "rpc_duration_seconds"
+                  - pairs > pair
+                    - ident: "quantile"
+                    - string > inner: "0.99"
+                  - number: "76656"
+                - promstmt
+                  - key: "rpc_duration_seconds_sum"
+                  - number: "1.7560473e+07"
+                - promstmt
+                  - key: "rpc_duration_seconds_count"
+                  - number: "2693"
+              - EOI: ""
+             */
+
         let result = parse(&input);
+        if let Ok(ref v) = result {
+            for d in v {
+                println!("{}", format!("{d}"));
+            }
+        }
         assert_eq!(result.is_ok(), true);
     }
 }
-
-/*
-- statement
-  - block
-    - typexpr
-      - typekey > key: "http_requests_total"
-      - typeval > countertype: "counter"
-    - helpexpr
-      - helpkey > key: "http_requests_total"
-      - commentval: "The total number of HTTP requests."
-    - promstmt
-      - key: "http_requests_total"
-      - pairs
-        - pair
-          - ident: "method"
-          - string > inner: "post"
-        - pair
-          - ident: "code"
-          - string > inner: "200"
-      - number: "1027"
-      - number: "1395066363000"
-    - promstmt
-      - key: "http_requests_total"
-      - pairs
-        - pair
-          - ident: "method"
-          - string > inner: "post"
-        - pair
-          - ident: "code"
-          - string > inner: "400"
-      - number: "3"
-      - number: "1395066363000"
-  - block
-    - genericomment > commentval: "Escaping in label values:"
-    - promstmt
-      - key: "msdos_file_access_time_seconds"
-      - pairs
-        - pair
-          - ident: "path"
-          - string > inner: "C:\\\\DIR\\\\FILE.TXT"
-        - pair
-          - ident: "error"
-          - string > inner: "Cannot find file:\\n\\\"FILE.TXT\\\""
-      - number: "1.458255915e9"
-  - block
-    - genericomment > commentval: "Minimalistic line:"
-    - promstmt
-      - key: "metric_without_timestamp_and_labels"
-      - number: "12.47"
-  - block
-    - genericomment > commentval: "A weird metric from before the epoch:"
-    - promstmt
-      - key: "something_weird"
-      - pairs > pair
-        - ident: "problem"
-        - string > inner: "division by zero"
-      - posInf: "+Inf"
-      - number: "-3982045"
-  - block
-    - genericomment > commentval: "A histogram, which has a pretty complex representation in the text format:"
-    - helpexpr
-      - helpkey > key: "http_request_duration_seconds"
-      - commentval: "A histogram of the request duration."
-    - typexpr
-      - typekey > key: "http_request_duration_seconds"
-      - typeval > histogramtype: "histogram"
-    - promstmt
-      - key: "http_request_duration_seconds_bucket"
-      - pairs > pair
-        - ident: "le"
-        - string > inner: "0.05"
-      - number: "24054"
-    - promstmt
-      - key: "http_request_duration_seconds_bucket"
-      - pairs > pair
-        - ident: "le"
-        - string > inner: "0.1"
-      - number: "33444"
-    - promstmt
-      - key: "http_request_duration_seconds_bucket"
-      - pairs > pair
-        - ident: "le"
-        - string > inner: "0.2"
-      - number: "100392"
-    - promstmt
-      - key: "http_request_duration_seconds_bucket"
-      - pairs > pair
-        - ident: "le"
-        - string > inner: "0.5"
-      - number: "129389"
-    - promstmt
-      - key: "http_request_duration_seconds_bucket"
-      - pairs > pair
-        - ident: "le"
-        - string > inner: "1"
-      - number: "133988"
-    - promstmt
-      - key: "http_request_duration_seconds_bucket"
-      - pairs > pair
-        - ident: "le"
-        - string > inner: "+Inf"
-      - number: "144320"
-    - promstmt
-      - key: "http_request_duration_seconds_sum"
-      - number: "53423"
-    - promstmt
-      - key: "http_request_duration_seconds_count"
-      - number: "144320"
-  - block
-    - genericomment > commentval: "Finally a summary, which has a complex representation, too:"
-    - helpexpr
-      - helpkey > key: "rpc_duration_seconds"
-      - commentval: "A summary of the RPC duration in seconds."
-    - typexpr
-      - typekey > key: "rpc_duration_seconds"
-      - typeval > summarytype: "summary"
-    - promstmt
-      - key: "rpc_duration_seconds"
-      - pairs > pair
-        - ident: "quantile"
-        - string > inner: "0.01"
-      - number: "3102"
-    - promstmt
-      - key: "rpc_duration_seconds"
-      - pairs > pair
-        - ident: "quantile"
-        - string > inner: "0.05"
-      - number: "3272"
-    - promstmt
-      - key: "rpc_duration_seconds"
-      - pairs > pair
-        - ident: "quantile"
-        - string > inner: "0.5"
-      - number: "4773"
-    - promstmt
-      - key: "rpc_duration_seconds"
-      - pairs > pair
-        - ident: "quantile"
-        - string > inner: "0.9"
-      - number: "9001"
-    - promstmt
-      - key: "rpc_duration_seconds"
-      - pairs > pair
-        - ident: "quantile"
-        - string > inner: "0.99"
-      - number: "76656"
-    - promstmt
-      - key: "rpc_duration_seconds_sum"
-      - number: "1.7560473e+07"
-    - promstmt
-      - key: "rpc_duration_seconds_count"
-      - number: "2693"
-  - EOI: ""
- */
