@@ -18,7 +18,7 @@ pub enum Kind {
 pub struct Context<'a> {
     input: Cow<'a, str>,
     prefix: Option<String>,
-    result: Option<Vec<Value<'a>>>,
+    result: String,
 }
 
 impl<'a> Context<'a> {
@@ -26,7 +26,7 @@ impl<'a> Context<'a> {
         Self {
             input: std::borrow::Cow::Borrowed(input),
             prefix: None,
-            result: None,
+            result: String::with_capacity(input.len()),
         }
     }
 
@@ -34,13 +34,12 @@ impl<'a> Context<'a> {
         Self {
             input: std::borrow::Cow::Borrowed(input),
             prefix: Some(prefix.into()),
-            result: None,
+            result: String::with_capacity(input.len()),
         }
     }
 
     pub fn run(&mut self) -> Result<String, pest::error::Error<crate::parser::Rule>> {
         let mut result = parser::parse(self.input.as_ref())?;
-        let mut output: String = String::new();
         let prefix: String = if let Some(p) = &self.prefix {
             p.to_owned()
         } else {
@@ -48,9 +47,25 @@ impl<'a> Context<'a> {
         };
         for v in &mut result {
             v.prefix = Some(prefix.clone());
-            output.push_str(v.to_string().as_str());
+            self.result.push_str(v.to_string().as_str());
         }
-        Ok(output)
+
+        Ok(self.result.clone())
+    }
+
+    pub fn combine_with_prefix<S: Into<String>>(
+        &mut self,
+        input: &'a str,
+        prefix: S,
+    ) -> Result<String, pest::error::Error<crate::parser::Rule>> {
+        let mut result = parser::parse(input)?;
+        let prefix: String = prefix.into();
+        for v in &mut result {
+            v.prefix = Some(prefix.clone());
+            self.result.push_str(v.to_string().as_str());
+        }
+
+        Ok(self.result.clone())
     }
 }
 
@@ -362,12 +377,26 @@ prefix_rpc_duration_seconds_count 2693
 
 "#;
         let mut ctx = Context::with_prefix(&input, "prefix_");
-        let output = ctx.run();
+        {
+            let binding = &mut ctx;
+            let output = binding.run();
 
-        assert_eq!(output.is_err(), false);
+            assert_eq!(output.is_err(), false);
 
-        let outstr = output.unwrap();
-        assert_eq!(&outstr, &expect);
-        println!("{}", &outstr);
+            let outstr = output.unwrap();
+            assert_eq!(&outstr, &expect);
+            println!("A: {}", &outstr);
+        }
+        {
+            let block = r#"# Minimalistic line:
+metric_without_timestamp_and_labels 12.47"#;
+            let binding = &mut ctx;
+            let output = binding.combine_with_prefix(block, "second_prefix_");
+
+            assert_eq!(output.is_err(), false);
+
+            let outstr = output.clone().unwrap();
+            println!("Final: \n{}", &outstr);
+        }
     }
 }
