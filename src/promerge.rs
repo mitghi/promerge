@@ -348,9 +348,26 @@ rpc_duration_seconds{quantile="0.99"} 76656
 rpc_duration_seconds_sum 1.7560473e+07
 rpc_duration_seconds_count 2693
 "#;
+
+        let expect = r#"# Finally a summary, which has a complex representation, too:
+# HELP prefix_rpc_duration_seconds A summary of the RPC duration in seconds.
+# TYPE prefix_rpc_duration_seconds summary
+prefix_rpc_duration_seconds{quantile="0.01"} 3102
+prefix_rpc_duration_seconds{quantile="0.05"} 3272
+prefix_rpc_duration_seconds{quantile="0.5"} 4773
+prefix_rpc_duration_seconds{quantile="0.9"} 9001
+prefix_rpc_duration_seconds{quantile="0.99"} 76656
+prefix_rpc_duration_seconds_sum 1.7560473e+07
+prefix_rpc_duration_seconds_count 2693
+
+"#;
         let mut ctx = Context::with_prefix(&input, "prefix_");
         let output = ctx.run();
+
         assert_eq!(output.is_err(), false);
-        println!("{}", output.unwrap());
+
+        let outstr = output.unwrap();
+        assert_eq!(&outstr, &expect);
+        println!("{}", &outstr);
     }
 }
