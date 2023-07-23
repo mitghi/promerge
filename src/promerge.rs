@@ -3,6 +3,8 @@ use std::borrow::Cow;
 #[allow(unused_imports)]
 use serde::{Deserialize, Serialize};
 
+use crate::parser;
+
 #[derive(Debug, Clone)]
 pub enum Kind {
     Untyped,
@@ -35,6 +37,21 @@ impl<'a> Context<'a> {
             result: None,
         }
     }
+
+    pub fn run(&mut self) -> Result<String, pest::error::Error<crate::parser::Rule>> {
+        let mut result = parser::parse(self.input.as_ref())?;
+        let mut output: String = String::new();
+        let prefix: String = if let Some(p) = &self.prefix {
+            p.to_owned()
+        } else {
+            "".to_string()
+        };
+        for v in &mut result {
+            v.prefix = Some(prefix.clone());
+            output.push_str(v.to_string().as_str());
+        }
+        Ok(output)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +79,11 @@ impl<'a> Value<'a> {
         let mut buffer: String = String::new();
         let lenpairs = self.pairs.len();
         let lenvalues = self.values.len();
+        let prefix = if let Some(p) = &self.prefix {
+            p.as_ref()
+        } else {
+            ""
+        };
         let is_histogram = if let Some(k) = &self.description {
             match k.kind {
                 Kind::Histogram => true,
@@ -80,13 +102,14 @@ impl<'a> Value<'a> {
         } else {
             self.key.as_ref()
         };
+
         if lenpairs == 0 && lenvalues > 0 {
             for v in &self.values {
                 let lval = v.0.as_ref();
                 if let Some(rval) = &v.1 {
-                    writeln!(buffer, "{} {} {}", &key, lval, rval.as_ref()).unwrap();
+                    writeln!(buffer, "{}{} {} {}", &prefix, &key, lval, rval.as_ref()).unwrap();
                 } else {
-                    writeln!(buffer, "{} {}", &key, lval).unwrap();
+                    writeln!(buffer, "{}{} {}", &prefix, &key, lval).unwrap();
                 }
             }
         } else {
@@ -110,12 +133,13 @@ impl<'a> Value<'a> {
                 let lval = v.0.as_ref();
                 if let Some(rval) = &v.1 {
                     if !had_tuple {
-                        writeln!(buffer, "{} {} {}", &key, lval, rval.as_ref()).unwrap();
+                        writeln!(buffer, "{}{} {} {}", &prefix, &key, lval, rval.as_ref()).unwrap();
                     } else {
                         if is_histogram {
                             writeln!(
                                 buffer,
-                                "{}_bucket{{{}}} {} {}",
+                                "{}{}_bucket{{{}}} {} {}",
+                                &prefix,
                                 &key,
                                 pbuff,
                                 lval,
@@ -123,37 +147,47 @@ impl<'a> Value<'a> {
                             )
                             .unwrap();
                         } else {
-                            writeln!(buffer, "{}{{{}}} {} {}", &key, pbuff, lval, rval.as_ref())
-                                .unwrap();
+                            writeln!(
+                                buffer,
+                                "{}{}{{{}}} {} {}",
+                                &prefix,
+                                &key,
+                                pbuff,
+                                lval,
+                                rval.as_ref()
+                            )
+                            .unwrap();
                         }
                     }
                 } else {
                     if !had_tuple {
-                        writeln!(buffer, "{} {}", &key, lval).unwrap();
+                        writeln!(buffer, "{}{} {}", &prefix, &key, lval).unwrap();
                     } else {
                         if is_histogram {
-                            writeln!(buffer, "{}_bucket{{{}}} {}", &key, pbuff, lval).unwrap();
+                            writeln!(buffer, "{}{}_bucket{{{}}} {}", &prefix, &key, pbuff, lval)
+                                .unwrap();
                         } else {
-                            writeln!(buffer, "{}{{{}}} {}", &key, pbuff, lval).unwrap();
+                            writeln!(buffer, "{}{}{{{}}} {}", &prefix, &key, pbuff, lval).unwrap();
                         }
                     }
                 }
             }
         }
         if let Some(sum) = &self.sum {
-            writeln!(buffer, "{}_sum {}", &key, &sum).unwrap();
+            writeln!(buffer, "{}{}_sum {}", &prefix, &key, &sum).unwrap();
         }
         if let Some(count) = &self.count {
-            writeln!(buffer, "{}_count {}", &key, &count).unwrap();
+            writeln!(buffer, "{}{}_count {}", &prefix, &key, &count).unwrap();
         }
         buffer
     }
 }
 
 impl<'a> Desc<'a> {
-    fn to_string(&self) -> String {
+    fn to_string(&self, prefix: &Option<String>) -> String {
         let mut buffer: String = String::new();
         let kind = self.kind.to_string();
+        let prefix = if let Some(p) = &prefix { &p } else { "" };
         use std::fmt::Write;
         if let Some(comment) = &self.comment {
             writeln!(buffer, "# {}", comment.as_ref()).unwrap();
@@ -163,7 +197,7 @@ impl<'a> Desc<'a> {
             writeln!(
                 buffer,
                 "# HELP {} {}",
-                self.name.as_ref(),
+                format!("{}{}", &prefix, self.name.as_ref()),
                 help_desc.as_ref()
             )
             .unwrap();
@@ -171,7 +205,13 @@ impl<'a> Desc<'a> {
         match &self.kind {
             Kind::Untyped => {}
             _ => {
-                writeln!(buffer, "# TYPE {} {}", self.name.as_ref(), kind).unwrap();
+                writeln!(
+                    buffer,
+                    "# TYPE {} {}",
+                    format!("{}{}", &prefix, self.name.as_ref()),
+                    kind
+                )
+                .unwrap();
             }
         };
 
@@ -182,7 +222,7 @@ impl<'a> Desc<'a> {
 impl<'a> std::fmt::Display for Value<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         if let Some(desc) = &self.description {
-            write!(f, "{}", desc.to_string()).unwrap();
+            write!(f, "{}", desc.to_string(&self.prefix)).unwrap();
         }
         writeln!(f, "{}", self.to_string()).unwrap();
         Ok(())
@@ -288,5 +328,29 @@ impl<'a> Value<'a> {
 
     pub fn set_count(&mut self, count: &'a str) {
         self.count = Some(std::borrow::Cow::Borrowed(count));
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_context() {
+        let input = r#"# Finally a summary, which has a complex representation, too:
+# HELP rpc_duration_seconds A summary of the RPC duration in seconds.
+# TYPE rpc_duration_seconds summary
+rpc_duration_seconds{quantile="0.01"} 3102
+rpc_duration_seconds{quantile="0.05"} 3272
+rpc_duration_seconds{quantile="0.5"} 4773
+rpc_duration_seconds{quantile="0.9"} 9001
+rpc_duration_seconds{quantile="0.99"} 76656
+rpc_duration_seconds_sum 1.7560473e+07
+rpc_duration_seconds_count 2693
+"#;
+        let mut ctx = Context::with_prefix(&input, "prefix_");
+        let output = ctx.run();
+        assert_eq!(output.is_err(), false);
+        println!("{}", output.unwrap());
     }
 }
