@@ -67,6 +67,30 @@ impl<'a> Context<'a> {
 
         Ok(self.result.clone())
     }
+
+    pub fn combine_with_prefix_and_pairs<S: Into<String>>(
+        &mut self,
+        input: &'a str,
+        pairs: &[(String, String)],
+        prefix: S,
+    ) -> Result<String, pest::error::Error<crate::parser::Rule>> {
+        let mut result = parser::parse(input)?;
+        let prefix: String = prefix.into();
+        for v in &mut result {
+            v.prefix = Some(prefix.clone());
+            for vp in &mut v.pairs {
+                pairs.iter().for_each(|p| {
+                    vp.push((
+                        std::borrow::Cow::Borrowed(&p.0),
+                        std::borrow::Cow::Borrowed(&p.1),
+                    ));
+                });
+            }
+            self.result.push_str(v.to_string().as_str());
+        }
+
+        Ok(self.result.clone())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -329,7 +353,7 @@ impl<'a> Value<'a> {
         self.values.push((a.unwrap(), b));
     }
 
-    pub fn push_pairs(&mut self, values: &Vec<&'a str>) {
+    pub fn push_pairs<'b>(&mut self, values: &'b [&'a str]) {
         let mut result: Vec<(Cow<'a, str>, Cow<'a, str>)> = Vec::with_capacity(values.len());
         for slice in values.chunks_exact(2) {
             result.push((slice[0].into(), slice[1].into()));
@@ -391,7 +415,11 @@ prefix_rpc_duration_seconds_count 2693
             let block = r#"# Minimalistic line:
 metric_without_timestamp_and_labels 12.47"#;
             let binding = &mut ctx;
-            let output = binding.combine_with_prefix(block, "second_prefix_");
+            let output = binding.combine_with_prefix_and_pairs(
+                block,
+                &[("custom_key".into(), "custom_value".into())],
+                "second_prefix_",
+            );
 
             assert_eq!(output.is_err(), false);
 
