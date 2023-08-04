@@ -1,6 +1,6 @@
 //! Module containing parser for promerge.
 
-use crate::promerge::{Desc, Kind, Value};
+use crate::promerge::{Desc, Kind, Segment, Value};
 
 use crate::*;
 
@@ -97,24 +97,49 @@ pub(crate) fn parse<'a>(input: &'a str) -> Result<Vec<Value<'_>>, pest::error::E
                                         );
                                     }
                                     Rule::NaN | Rule::number | Rule::posInf | Rule::negInf => {
-                                        if key.ends_with("_sum") {
-                                            let mut n = node.unwrap();
-                                            n.set_sum(v.as_span().as_str());
-                                            node = Some(n);
+                                        let is_sum = key.ends_with("_sum");
+                                        let is_count = key.ends_with("_count");
+                                        println!("key is: {}", &key);
+                                        if is_sum || is_count {
                                             should_skip_nums = true;
-                                            continue;
-                                        } else if key.ends_with("_count") {
                                             let mut n = node.unwrap();
-                                            n.set_count(v.as_span().as_str());
+                                            let content = v.as_span().as_str();
+                                            if is_sum {
+                                                n.sum = n.sum.map_or(
+                                                    {
+                                                        let mut v = Segment::default();
+                                                        v.set_value(content);
+                                                        Some(v)
+                                                    },
+                                                    |mut v: Segment<'_>| {
+                                                        v.set_value(content);
+                                                        Some(v)
+                                                    },
+                                                );
+                                            }
+                                            if is_count {
+                                                n.count = n.count.map_or(
+                                                    {
+                                                        let mut v = Segment::default();
+                                                        v.set_value(content);
+                                                        Some(v)
+                                                    },
+                                                    |mut v: Segment<'_>| {
+                                                        v.set_value(content);
+                                                        Some(v)
+                                                    },
+                                                );
+                                            }
                                             node = Some(n);
-                                            should_skip_nums = true;
                                             continue;
                                         }
                                         nums[nidx] = v.as_span().as_str();
                                         nidx += 1;
                                     }
                                     Rule::pairs => {
-                                        had_pairs = true;
+                                        let is_sum = key.ends_with("_sum");
+                                        let is_count = key.ends_with("_count");
+                                        had_pairs = (is_sum || is_count) == false;
                                         for p in v.into_inner() {
                                             let mut inner = p.into_inner();
                                             let key = inner.next().unwrap().as_span().as_str();
@@ -126,8 +151,39 @@ pub(crate) fn parse<'a>(input: &'a str) -> Result<Vec<Value<'_>>, pest::error::E
                                                 .unwrap()
                                                 .as_span()
                                                 .as_str();
-                                            pairs.push(key);
-                                            pairs.push(value);
+                                            if had_pairs {
+                                                pairs.push(key);
+                                                pairs.push(value);
+                                            } else {
+                                                let mut n = node.unwrap();
+                                                if is_sum {
+                                                    n.sum = n.sum.map_or(
+                                                        {
+                                                            let mut v = Segment::default();
+                                                            v.push_pairs(&[&key, &value]);
+                                                            Some(v)
+                                                        },
+                                                        |mut v: Segment<'_>| {
+                                                            v.push_pairs(&[&key, &value]);
+                                                            Some(v)
+                                                        },
+                                                    );
+                                                }
+                                                if is_count {
+                                                    n.count = n.count.map_or(
+                                                        {
+                                                            let mut v = Segment::default();
+                                                            v.push_pairs(&[&key, &value]);
+                                                            Some(v)
+                                                        },
+                                                        |mut v: Segment<'_>| {
+                                                            v.push_pairs(&[&key, &value]);
+                                                            Some(v)
+                                                        },
+                                                    );
+                                                }
+                                                node = Some(n);
+                                            }
                                         }
                                     }
                                     _ => {
@@ -204,8 +260,8 @@ rpc_duration_seconds{quantile="0.05"} 3272
 rpc_duration_seconds{quantile="0.5"} 4773
 rpc_duration_seconds{quantile="0.9"} 9001
 rpc_duration_seconds{quantile="0.99"} 76656
-rpc_duration_seconds_sum 1.7560473e+07
-rpc_duration_seconds_count 2693
+rpc_duration_seconds_sum{some="value"} 1.7560473e+07
+rpc_duration_seconds_count{another="value2"} 2693
 "#;
 
         /*

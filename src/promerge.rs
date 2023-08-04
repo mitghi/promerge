@@ -15,6 +15,31 @@ pub enum Kind {
 }
 
 #[derive(Debug, Clone)]
+pub struct Desc<'a> {
+    pub kind: Kind,
+    pub name: Cow<'a, str>,
+    pub help_desc: Option<Cow<'a, str>>,
+    pub comment: Option<Cow<'a, str>>,
+}
+
+#[derive(Default, Debug)]
+pub struct Segment<'a> {
+    pub value: Cow<'a, str>,
+    pub pairs: Vec<(Cow<'a, str>, Cow<'a, str>)>,
+}
+
+#[derive(Debug)]
+pub struct Value<'a> {
+    pub prefix: Option<String>,
+    pub description: Option<Desc<'a>>,
+    pub key: String,
+    pub pairs: Vec<Vec<(Cow<'a, str>, Cow<'a, str>)>>,
+    pub values: Vec<(Cow<'a, str>, Option<Cow<'a, str>>)>,
+    pub sum: Option<Segment<'a>>,
+    pub count: Option<Segment<'a>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Context<'a> {
     input: Cow<'a, str>,
     prefix: Option<String>,
@@ -78,7 +103,6 @@ impl<'a> Context<'a> {
             }
             self.result.push_str(v.to_string().as_str());
         }
-
         Ok(self.result.clone())
     }
 
@@ -121,25 +145,6 @@ impl<'a> Context<'a> {
 
         Ok(self.result.clone())
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Desc<'a> {
-    pub kind: Kind,
-    pub name: Cow<'a, str>,
-    pub help_desc: Option<Cow<'a, str>>,
-    pub comment: Option<Cow<'a, str>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Value<'a> {
-    pub prefix: Option<String>,
-    pub description: Option<Desc<'a>>,
-    pub key: String,
-    pub pairs: Vec<Vec<(Cow<'a, str>, Cow<'a, str>)>>,
-    pub values: Vec<(Cow<'a, str>, Option<Cow<'a, str>>)>,
-    pub sum: Option<Cow<'a, str>>,
-    pub count: Option<Cow<'a, str>>,
 }
 
 impl<'a> Value<'a> {
@@ -243,10 +248,10 @@ impl<'a> Value<'a> {
             }
         }
         if let Some(sum) = &self.sum {
-            writeln!(buffer, "{}{}_sum {}", &prefix, &key, &sum).unwrap();
+            writeln!(buffer, "{}{}_sum{}", &prefix, &key, sum.to_string()).unwrap();
         }
         if let Some(count) = &self.count {
-            writeln!(buffer, "{}{}_count {}", &prefix, &key, &count).unwrap();
+            writeln!(buffer, "{}{}_count{}", &prefix, &key, count.to_string()).unwrap();
         }
         buffer
     }
@@ -390,13 +395,45 @@ impl<'a> Value<'a> {
         }
         self.pairs.push(result);
     }
+}
 
-    pub(crate) fn set_sum(&mut self, sum: &'a str) {
-        self.sum = Some(std::borrow::Cow::Borrowed(sum));
+impl<'a> Segment<'a> {
+    #[inline]
+    pub fn set_value(&mut self, value: &'a str) {
+        self.value = std::borrow::Cow::Borrowed(&value);
     }
 
-    pub(crate) fn set_count(&mut self, count: &'a str) {
-        self.count = Some(std::borrow::Cow::Borrowed(count));
+    #[inline]
+    pub fn push_pairs<'b>(&mut self, values: &'b [&'a str]) {
+        for slice in values.chunks_exact(2) {
+            self.pairs.push((slice[0].into(), slice[1].into()));
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut buffer: String = String::new();
+        use std::fmt::Write;
+
+        let lenpairs = self.pairs.len();
+        let should_append_bracket = lenpairs > 0;
+        if should_append_bracket {
+            write!(buffer, "{{").unwrap();
+        }
+        for (i, p) in self.pairs.iter().enumerate() {
+            write!(buffer, "{}=\"{}\"", p.0, p.1).unwrap();
+            if i < (lenpairs - 1) {
+                write!(buffer, ",").unwrap()
+            }
+        }
+        if should_append_bracket {
+            write!(buffer, "}}").unwrap();
+        }
+
+        if !self.value.is_empty() {
+            write!(buffer, " {}", self.value).unwrap();
+        }
+
+        buffer
     }
 }
 
@@ -414,8 +451,8 @@ rpc_duration_seconds{quantile="0.05"} 3272
 rpc_duration_seconds{quantile="0.5"} 4773
 rpc_duration_seconds{quantile="0.9"} 9001
 rpc_duration_seconds{quantile="0.99"} 76656
-rpc_duration_seconds_sum 1.7560473e+07
-rpc_duration_seconds_count 2693
+rpc_duration_seconds_sum{key="value",keytwo="value2"} 1.7560473e+07
+rpc_duration_seconds_count{key="value",keytwo="value2"} 2693
 "#;
 
         let expect = r#"# Finally a summary, which has a complex representation, too:
@@ -426,8 +463,8 @@ prefix_rpc_duration_seconds{quantile="0.05"} 3272
 prefix_rpc_duration_seconds{quantile="0.5"} 4773
 prefix_rpc_duration_seconds{quantile="0.9"} 9001
 prefix_rpc_duration_seconds{quantile="0.99"} 76656
-prefix_rpc_duration_seconds_sum 1.7560473e+07
-prefix_rpc_duration_seconds_count 2693
+prefix_rpc_duration_seconds_sum{key="value",keytwo="value2"} 1.7560473e+07
+prefix_rpc_duration_seconds_count{key="value",keytwo="value2"} 2693
 
 "#;
         let mut ctx = Context::with_prefix(&input, "prefix_");

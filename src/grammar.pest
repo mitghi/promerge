@@ -12,8 +12,8 @@ char = {
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
-special_charaters = _{"_" | "-" | "\\"}
-whitespace = _{(" "| "\n")*}
+whitespace_or_newline = _{(" "| "\n")*}
+hash = _{"#"}
 posInf = {"+Inf"}
 negInf = {"-Inf"}
 NaN = {"NaN"}
@@ -21,26 +21,24 @@ lbrace = _{"{"}
 rbrace = _{"}"}
 typelit = _{"TYPE"}
 helplit = _{"HELP"}
-ident = {alpha+}
-key = @{ident ~ ("_"~ident)*}
-pair = {ident ~ "="  ~ string}
 comma = _{","}
-pairs = {pair ~ (comma ~ pair)*}
-hash = _{"#"}
-helpkey = {key}
-helpval = {inner}
-typekey = {key}
 countertype = {"counter"}
 gaugetype = {"gauge"}
 histogramtype = {"histogram"}
 summarytype = {"summary"}
 untyped = {"untyped"}
-typeval = { countertype | gaugetype | histogramtype | summarytype | untyped }
+ident = {alpha+}
+key = @{ident ~ ("_" ~ ident)*}
+pair = {ident ~ "="  ~ string}
+pairs = {pair ~ (comma ~ pair)*}
+helpkey = {key}
+helpval = {inner}
+typekey = {key}
+typeval = {countertype | gaugetype | histogramtype | summarytype | untyped}
 commentval = @{((ASCII_DIGIT| ASCII_NONZERO_DIGIT | ASCII_BIN_DIGIT | ASCII_OCT_DIGIT | ASCII_HEX_DIGIT | ASCII_ALPHA_LOWER | ASCII_ALPHA_UPPER | ASCII_ALPHA | ASCII_ALPHANUMERIC | !"\n" ~ ANY ))*}
-helpexpr = {hash ~ whitespace ~ helplit ~ whitespace ~ helpkey ~  whitespace ~ commentval}
-typexpr = {hash ~ whitespace ~ typelit ~ whitespace ~ typekey ~ whitespace ~ typeval }
-genericomment = {hash ~ whitespace ~ commentval}
-promstmt = {key ~ (lbrace ~ (pairs)* ~ rbrace){0,1} ~ whitespace ~ ((posInf | negInf | NaN | number) ~ whitespace ){0,2}}
+helpexpr = {hash ~ whitespace_or_newline ~ helplit ~ whitespace_or_newline ~ helpkey ~  whitespace_or_newline ~ commentval}
+typexpr = {hash ~ whitespace_or_newline ~ typelit ~ whitespace_or_newline ~ typekey ~ whitespace_or_newline ~ typeval }
+genericomment = {hash ~ whitespace_or_newline ~ commentval}
+promstmt = {key ~ (lbrace ~ (pairs)* ~ rbrace){0,1} ~ whitespace_or_newline ~ ((posInf | negInf | NaN | number) ~ whitespace_or_newline ){0,2}}
 block = {((helpexpr | typexpr | genericomment)~ NEWLINE?)+ ~ (promstmt ~ NEWLINE?)+}
 statement = {SOI ~ block+ ~ EOI}
-statement_debug = { SOI ~ ((promstmt | helpexpr | typexpr | genericomment) ~ NEWLINE?)* ~ EOI}
