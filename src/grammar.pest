@@ -39,6 +39,6 @@ commentval = @{((ASCII_DIGIT| ASCII_NONZERO_DIGIT | ASCII_BIN_DIGIT | ASCII_OCT_
 helpexpr = {hash ~ whitespace_or_newline ~ helplit ~ whitespace_or_newline ~ helpkey ~  whitespace_or_newline ~ commentval}
 typexpr = {hash ~ whitespace_or_newline ~ typelit ~ whitespace_or_newline ~ typekey ~ whitespace_or_newline ~ typeval }
 genericomment = {hash ~ whitespace_or_newline ~ commentval}
-promstmt = {key ~ (lbrace ~ (pairs)* ~ rbrace){0,1} ~ whitespace_or_newline ~ ((posInf | negInf | NaN | number) ~ whitespace_or_newline ){0,2}}
+promstmt = {key ~ (lbrace ~ (pairs)* ~ rbrace){0,1} ~ whitespace_or_newline ~ ((posInf | negInf | NaN | number) ~ whitespace_or_newline ){1,2}}
 block = {((helpexpr | typexpr | genericomment)~ NEWLINE?)+ ~ (promstmt ~ NEWLINE?)+}
 statement = {SOI ~ block+ ~ EOI}
