@@ -9,7 +9,7 @@ exclude = [".gitignore"]
 repository = "https://github.com/mitghi/promerge"
 documentation = "https://github.com/mitghi/promerge"
 homepage = "https://github.com/mitghi/promerge"
-description = ""
+description = "Parse, edit and merge Prometheus metrics exposition format"
 keywords = ["prometheus", "prometheus-metrics", "merge-prometheus", "grafana"]
 categories = ["algorithms", "encoding", "parser"]
 
