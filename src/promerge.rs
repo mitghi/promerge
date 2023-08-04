@@ -18,6 +18,7 @@ pub enum Kind {
 pub struct Context<'a> {
     input: Cow<'a, str>,
     prefix: Option<String>,
+    pairs: Option<&'a [(String, String)]>,
     result: String,
 }
 
@@ -26,6 +27,7 @@ impl<'a> Context<'a> {
         Self {
             input: std::borrow::Cow::Borrowed(input),
             prefix: None,
+            pairs: None,
             result: String::with_capacity(input.len()),
         }
     }
@@ -34,6 +36,20 @@ impl<'a> Context<'a> {
         Self {
             input: std::borrow::Cow::Borrowed(input),
             prefix: Some(prefix.into()),
+            pairs: None,
+            result: String::with_capacity(input.len()),
+        }
+    }
+
+    pub fn with_prefix_and_pairs<S: Into<String>>(
+        input: &'a str,
+        prefix: S,
+        pairs: &'a [(String, String)],
+    ) -> Self {
+        Self {
+            input: std::borrow::Cow::Borrowed(input),
+            prefix: Some(prefix.into()),
+            pairs: Some(pairs),
             result: String::with_capacity(input.len()),
         }
     }
@@ -45,8 +61,21 @@ impl<'a> Context<'a> {
         } else {
             "".to_string()
         };
+        let pairs: &[(String, String)] = if let Some(pairs) = &self.pairs {
+            pairs
+        } else {
+            &[]
+        };
         for v in &mut result {
             v.prefix = Some(prefix.clone());
+            for vp in &mut v.pairs {
+                pairs.iter().for_each(|p| {
+                    vp.push((
+                        std::borrow::Cow::Borrowed(&p.0),
+                        std::borrow::Cow::Borrowed(&p.1),
+                    ));
+                });
+            }
             self.result.push_str(v.to_string().as_str());
         }
 
@@ -74,6 +103,7 @@ impl<'a> Context<'a> {
         pairs: &[(String, String)],
         prefix: S,
     ) -> Result<String, pest::error::Error<crate::parser::Rule>> {
+        // TODO(): move duplicate code
         let mut result = parser::parse(input)?;
         let prefix: String = prefix.into();
         for v in &mut result {
@@ -320,7 +350,7 @@ impl<'a> Desc<'a> {
 }
 
 impl<'a> Value<'a> {
-    pub fn new<S: Into<String>>(key: S) -> Self {
+    pub(crate) fn new<S: Into<String>>(key: S) -> Self {
         Self {
             prefix: None,
             description: None,
@@ -332,7 +362,7 @@ impl<'a> Value<'a> {
         }
     }
 
-    pub fn push_values<'b>(&mut self, values: &'b [&'a str; 2]) {
+    pub(crate) fn push_values<'b>(&mut self, values: &'b [&'a str; 2]) {
         let a = {
             if values[0].is_empty() {
                 None
@@ -353,7 +383,7 @@ impl<'a> Value<'a> {
         self.values.push((a.unwrap(), b));
     }
 
-    pub fn push_pairs<'b>(&mut self, values: &'b [&'a str]) {
+    pub(crate) fn push_pairs<'b>(&mut self, values: &'b [&'a str]) {
         let mut result: Vec<(Cow<'a, str>, Cow<'a, str>)> = Vec::with_capacity(values.len());
         for slice in values.chunks_exact(2) {
             result.push((slice[0].into(), slice[1].into()));
@@ -361,11 +391,11 @@ impl<'a> Value<'a> {
         self.pairs.push(result);
     }
 
-    pub fn set_sum(&mut self, sum: &'a str) {
+    pub(crate) fn set_sum(&mut self, sum: &'a str) {
         self.sum = Some(std::borrow::Cow::Borrowed(sum));
     }
 
-    pub fn set_count(&mut self, count: &'a str) {
+    pub(crate) fn set_count(&mut self, count: &'a str) {
         self.count = Some(std::borrow::Cow::Borrowed(count));
     }
 }
