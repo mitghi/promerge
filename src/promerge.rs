@@ -1,9 +1,9 @@
+//! Module containing logic to rebuild the Prometheus exposition lines.
 use std::borrow::Cow;
 
-#[allow(unused_imports)]
-use serde::{Deserialize, Serialize};
-
 use crate::parser;
+
+type CowTuple<'a> = (Cow<'a, str>, Cow<'a, str>);
 
 #[derive(Debug, Clone)]
 pub enum Kind {
@@ -14,6 +14,7 @@ pub enum Kind {
     Summary,
 }
 
+/// Desc contains comment lines.
 #[derive(Debug, Clone)]
 pub struct Desc<'a> {
     pub kind: Kind,
@@ -22,23 +23,33 @@ pub struct Desc<'a> {
     pub comment: Option<Cow<'a, str>>,
 }
 
+/// Segment represents either '_count' or
+/// '_sum' lines.
 #[derive(Default, Debug)]
 pub struct Segment<'a> {
     pub value: Cow<'a, str>,
-    pub pairs: Vec<(Cow<'a, str>, Cow<'a, str>)>,
+    pub pairs: Vec<CowTuple<'a>>,
 }
 
+/// Value represents a metric group.
+/// The construction work as follow:
+/// - push comments from description to output
+/// - for all pairs, construct a line with metric name
+///    suitable for metric type, with pairs and values
+/// - when applicable, print sum and count in the end
 #[derive(Debug)]
 pub struct Value<'a> {
     pub prefix: Option<String>,
     pub description: Option<Desc<'a>>,
     pub key: String,
-    pub pairs: Vec<Vec<(Cow<'a, str>, Cow<'a, str>)>>,
+    pub pairs: Vec<Vec<CowTuple<'a>>>,
     pub values: Vec<(Cow<'a, str>, Option<Cow<'a, str>>)>,
     pub sum: Option<Segment<'a>>,
     pub count: Option<Segment<'a>>,
 }
 
+/// Context encapsulates data for parsing
+/// and evaluating Prometheus exposition lines.
 #[derive(Debug, Clone)]
 pub struct Context<'a> {
     input: Cow<'a, str>,
@@ -79,30 +90,35 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn run(&mut self) -> Result<String, pest::error::Error<crate::parser::Rule>> {
-        let mut result = parser::parse(self.input.as_ref())?;
-        let prefix: String = if let Some(p) = &self.prefix {
-            p.to_owned()
-        } else {
-            "".to_string()
-        };
-        let pairs: &[(String, String)] = if let Some(pairs) = &self.pairs {
-            pairs
-        } else {
-            &[]
-        };
+    fn add_custom_attributes(
+        &self,
+        prefix: Option<String>,
+        pairs: Option<&'a [(String, String)]>,
+        mut result: Vec<Value<'a>>,
+    ) -> String {
+        let mut buff: String = String::new();
+        let prefix: String = prefix.unwrap_or("".into());
+        let pairs: &[(String, String)] = pairs.unwrap_or(&[]);
         for v in &mut result {
             v.prefix = Some(prefix.clone());
             for vp in &mut v.pairs {
-                pairs.iter().for_each(|p| {
+                for p in pairs {
                     vp.push((
                         std::borrow::Cow::Borrowed(&p.0),
                         std::borrow::Cow::Borrowed(&p.1),
                     ));
-                });
+                }
             }
-            self.result.push_str(v.to_string().as_str());
+            buff.push_str(v.to_string().as_str());
         }
+        buff
+    }
+
+    pub fn run(&mut self) -> Result<String, pest::error::Error<crate::parser::Rule>> {
+        let result = parser::parse(self.input.as_ref())?;
+        let buff = self.add_custom_attributes(self.prefix.clone(), self.pairs.clone(), result);
+        self.result.extend(buff.chars());
+
         Ok(self.result.clone())
     }
 
@@ -111,12 +127,9 @@ impl<'a> Context<'a> {
         input: &'a str,
         prefix: S,
     ) -> Result<String, pest::error::Error<crate::parser::Rule>> {
-        let mut result = parser::parse(input)?;
-        let prefix: String = prefix.into();
-        for v in &mut result {
-            v.prefix = Some(prefix.clone());
-            self.result.push_str(v.to_string().as_str());
-        }
+        let result = parser::parse(input)?;
+        let buff = self.add_custom_attributes(Some(prefix.into()), None, result);
+        self.result.extend(buff.chars());
 
         Ok(self.result.clone())
     }
@@ -127,21 +140,9 @@ impl<'a> Context<'a> {
         pairs: &[(String, String)],
         prefix: S,
     ) -> Result<String, pest::error::Error<crate::parser::Rule>> {
-        // TODO(): move duplicate code
-        let mut result = parser::parse(input)?;
-        let prefix: String = prefix.into();
-        for v in &mut result {
-            v.prefix = Some(prefix.clone());
-            for vp in &mut v.pairs {
-                pairs.iter().for_each(|p| {
-                    vp.push((
-                        std::borrow::Cow::Borrowed(&p.0),
-                        std::borrow::Cow::Borrowed(&p.1),
-                    ));
-                });
-            }
-            self.result.push_str(v.to_string().as_str());
-        }
+        let result = parser::parse(input)?;
+        let buff = self.add_custom_attributes(Some(prefix.into()), Some(pairs), result);
+        self.result.extend(buff.chars());
 
         Ok(self.result.clone())
     }
@@ -389,7 +390,7 @@ impl<'a> Value<'a> {
     }
 
     pub(crate) fn push_pairs<'b>(&mut self, values: &'b [&'a str]) {
-        let mut result: Vec<(Cow<'a, str>, Cow<'a, str>)> = Vec::with_capacity(values.len());
+        let mut result: Vec<CowTuple<'a>> = Vec::with_capacity(values.len());
         for slice in values.chunks_exact(2) {
             result.push((slice[0].into(), slice[1].into()));
         }
