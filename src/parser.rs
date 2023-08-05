@@ -99,7 +99,6 @@ pub(crate) fn parse<'a>(input: &'a str) -> Result<Vec<Value<'_>>, pest::error::E
                                     Rule::NaN | Rule::number | Rule::posInf | Rule::negInf => {
                                         let is_sum = key.ends_with("_sum");
                                         let is_count = key.ends_with("_count");
-                                        println!("key is: {}", &key);
                                         if is_sum || is_count {
                                             should_skip_nums = true;
                                             let mut n = node.unwrap();
